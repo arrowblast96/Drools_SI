@@ -1,0 +1,118 @@
+package com.sample
+ 
+import com.sample.DroolsTest.*;
+ 
+import com.sample.Kategoria.*;
+import com.sample.Klient.*;
+import com.sample.Rezerwacja.*;
+import com.sample.Samochod.*;
+import com.sample.Zwrot.*;
+import java.util.Calendar;
+import java.util.ArrayList;
+import java.time.temporal.ChronoUnit;
+rule "Init"
+	when
+
+	then
+		Klient klient_A=new Klient(true);
+		Klient klient_B=new Klient(false);
+		Klient klient_C=new Klient(false);
+		Samochod samochod_A1=new Samochod(false,false,Kategoria.A);
+		Samochod samochod_A2=new Samochod(false,false,Kategoria.A);
+		Samochod samochod_B1=new Samochod(false,false,Kategoria.B);
+		Samochod samochod_D1=new Samochod(false,false,Kategoria.D);
+		Samochod samochod_D2=new Samochod(false,false,Kategoria.D);
+		Rezerwacja rezerwacja1=new Rezerwacja(new Samochod(true,true,Kategoria.NULL),klient_A,DroolsTest.calendar(2016,10,11),DroolsTest.calendar(2016,10,12), 0.00,66.00);
+		Rezerwacja rezerwacja2=new Rezerwacja(samochod_B1,klient_B,DroolsTest.calendar(2016,10,10),DroolsTest.calendar(2016,10,13), 0.00,100.00);
+	
+		insert(samochod_A1);
+		insert(samochod_A2);
+		insert(samochod_B1);
+		insert(samochod_D1);
+		insert(samochod_D2);
+		insert(rezerwacja1);
+		insert(rezerwacja2);
+		System.out.println("Init");
+		
+		
+end
+
+
+
+rule "Brakuje samochodu na stanie"
+	when
+	m :  Rezerwacja(samochod.getKategoria() != Kategoria.D);
+
+	$number_cars : ArrayList()
+            from collect(Samochod(kategoria == m.samochod.getKategoria()));
+    $number_rezerwacja : ArrayList(size()>$number_cars.size())
+            from collect(Rezerwacja(samochod.getKategoria() == m.samochod.getKategoria()));
+   	
+	then
+		m.upKategoria();
+	
+		System.out.println("Brakuje samochodu na stanie");
+		update(m);
+		
+end
+rule "Nie ma dostêpnych wymaganych samochodów"
+	when 
+	m : Rezerwacja(samochod.getKategoria() == Kategoria.D )
+
+	$number_cars : ArrayList()
+            from collect(Samochod(kategoria == m.samochod.getKategoria()));
+    $number_rezerwacja : ArrayList(size()>$number_cars.size())
+            from collect(Rezerwacja(samochod.getKategoria() == m.samochod.getKategoria()));
+    
+   then
+   System.out.println("Nie ma dostêpnych wymaganych samochodów");
+   retract(m);
+
+end
+rule "Nie mo¿esz mieæ dwóch samochodów na raz"
+	when
+	m : Rezerwacja($klient : klient)
+	n : Rezerwacja(klient == $klient , this != m)
+
+	then
+	System.out.println("Nie mo¿esz mieæ dwóch samochodów na raz");
+	
+	retract(n);
+
+
+end
+rule "Wygeneruj zwroty"
+	when 
+		m : Rezerwacja();
+		
+	then
+		Zwrot zwrot=new Zwrot(0,m.getData_zwrotu(),0,0,m,m.getOdleglosc());
+		zwrot.setCzas(ChronoUnit.DAYS.between(m.getData_pobrania().toInstant(),zwrot.getRzeczywista_data_zwrotu().toInstant())+1);
+		insert(zwrot);
+
+		System.out.println("Wygenerowano zwrot dla "+m);
+end
+rule "Oplata za rezerwacje 1-3 dni"
+
+	when
+		m : Zwrot($kat : rezerwacja.getKategoria_cenowa().ordinal(),getCzas()<=3);
+	
+	then
+		double ekwipunek=(m.getRezerwacja().getSamochod().isCzy_baga¿nik() | m.getRezerwacja().getSamochod().isCzy_fotelik()) ? 1.0 : 0.0;
+		m.setOplata((69.00+10.00*$kat)*m.getCzas()+10.00*ekwipunek+1.00*m.getOdleglosc());
+		
+		System.out.println(m.getOplata());
+	
+end
+rule "Oplata za rezerwacje powyzej 3 dni"
+
+	when
+		m : Zwrot($kat : rezerwacja.getKategoria_cenowa().ordinal(),czas>3);
+	
+	then
+		double ekwipunek=(m.getRezerwacja().getSamochod().isCzy_baga¿nik() | m.getRezerwacja().getSamochod().isCzy_fotelik()) ? 1.0 : 0.0;
+		m.setOplata((59.00+10.00*$kat)*m.getCzas()+10.00*ekwipunek+0.50*m.getOdleglosc());
+		
+		System.out.println(m.getOplata());
+	
+end
